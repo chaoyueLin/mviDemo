@@ -38,6 +38,8 @@ class LoginRepository {
             .flatMap { ownerInfoObservable }        // 2.获取用户详细信息
             .subscribeOn(Schedulers.io())
     }
+
+
 }
 
 class LoginLocalDataSource(

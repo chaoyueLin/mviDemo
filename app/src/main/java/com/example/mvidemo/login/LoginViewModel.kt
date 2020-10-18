@@ -18,11 +18,12 @@ import io.reactivex.subjects.PublishSubject
  * 描述：
  */
 
-class LoginViewModel() : BaseViewModel<LoginIntent, LoginViewState>() {
+class LoginViewModel : BaseViewModel<LoginIntent, LoginViewState>() {
 
     private val intentsSubject: PublishSubject<LoginIntent> = PublishSubject.create()
+    private val loginActionProcessorHolder:LoginActionProcessorHolder =LoginActionProcessorHolder()
+
     private val statesObservable: Observable<LoginViewState> = compose()
-    private val loginRepository:LoginRepository= LoginRepository()
     override fun processIntent(intents: Observable<LoginIntent>) {
         intents.subscribe(intentsSubject)
     }
@@ -31,9 +32,7 @@ class LoginViewModel() : BaseViewModel<LoginIntent, LoginViewState>() {
 
     private fun compose(): Observable<LoginViewState> {
         return intentsSubject
-//            .compose(intentFilter)
-//            .map(this::actionFromIntent)
-            .compose(actionProcessor)
+            .compose(loginActionProcessorHolder.actionProcessor)
             .scan(LoginViewState.idle(), reducer)
             .switchMap(specialEventProcessor)
             .distinctUntilChanged()
@@ -49,45 +48,11 @@ class LoginViewModel() : BaseViewModel<LoginIntent, LoginViewState>() {
             }
         }
 
-    private val loginClickActionTransformer =
-        ObservableTransformer<LoginIntent.LoginClicksIntent, LoginResult> { actions ->
-            actions.flatMap { o ->
-                val (username, password) = o
-                when (username.isNullOrEmpty() || password.isNullOrEmpty()) {
-                    true -> onLoginParamEmptyResult()
-                    false -> loginRepository
-                        .login(username, password)
-                        .toObservable()
-                        .flatMap(::onLoginSuccessResult)
-                        .onErrorReturn(LoginResult.ClickLoginResult::Failure)
-                        .subscribeOn(Schedulers.io())
-                        .observeOn(AndroidSchedulers.mainThread())
-                        .startWith(LoginResult.ClickLoginResult.InFlight)
-                }
-            }
-        }
-
-    private fun onLoginSuccessResult(loginUser: UserInfo): Observable<LoginResult.ClickLoginResult> =
-        Observable.just(LoginResult.ClickLoginResult.Success(loginUser))
 
 
-    private fun onLoginParamEmptyResult(): Observable<LoginResult.ClickLoginResult> =
-        Observable.just(Errors.SimpleMessageError("username or password can't be null!"))
-            .map(LoginResult.ClickLoginResult::Failure)
 
 
-    internal val actionProcessor =
-        ObservableTransformer<LoginIntent, LoginResult> { actions ->
-            actions.publish { shared ->
-                Observable.merge(
-                    shared.ofType(LoginIntent.LoginClicksIntent::class.java).compose(loginClickActionTransformer),
-                    shared.filter { all ->
-                        all !is LoginIntent &&
-                                 all !is LoginIntent.LoginClicksIntent
-                    }.flatMapErrorActionObservable()
-                )
-            }.retry()
-        }
+
 
     companion object {
 
